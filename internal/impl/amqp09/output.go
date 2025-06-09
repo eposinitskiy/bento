@@ -446,10 +446,21 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 		return fmt.Errorf("app ID interpolation error: %w", err)
 	}
 	headers := amqp.Table{}
+	headersSize := 0
 	_ = a.metaFilter.WalkMut(msg, func(k string, v any) error {
-		headers[strings.ReplaceAll(k, "_", "-")] = v
+		hk := strings.ReplaceAll(k, "_", "-")
+		headers[hk] = v
+		// TODO: header size debug logging
+		size := len(fmt.Sprintf("%v", v))
+		headersSize += size
+		if size > 1024 { // log all headers larger than 1KB
+			a.log.With("header", hk, "size", len(fmt.Sprintf("%v", v))).
+				Tracef("Header size exceeds 1KB")
+		}
 		return nil
 	})
+	a.log.With("total_headers", len(headers), "total_headers_size", headersSize).
+		Tracef("Sending AMQP message with headers")
 
 	exchange, err := a.exchange.TryString(msg)
 	if err != nil {
