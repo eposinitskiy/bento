@@ -462,6 +462,13 @@ func (a *amqp09Writer) Write(ctx context.Context, msg *service.Message) error {
 	a.log.With("total_headers", len(headers), "total_headers_size", headersSize).
 		Tracef("Sending AMQP message with headers")
 
+	// TODO: we hardcode rejection of the messages based on the default frame size of 131064 bytes,
+	// but ideally we should read the server's capabilities and use the max frame size from there.
+	const defaultMaxFrameSize = 131064
+	if headersSize > defaultMaxFrameSize {
+		return fmt.Errorf("total headers size %d exceeds the default max frame size of %d bytes", headersSize, defaultMaxFrameSize)
+	}
+
 	exchange, err := a.exchange.TryString(msg)
 	if err != nil {
 		return fmt.Errorf("exchange name interpolation error: %w", err)
