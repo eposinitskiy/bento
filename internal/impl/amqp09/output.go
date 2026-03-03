@@ -548,23 +548,27 @@ func (a *amqp09Writer) dial(amqpURL string) (conn *amqp.Connection, err error) {
 		return nil, fmt.Errorf("invalid AMQP URL: %w", err)
 	}
 
+	var (
+		sasl  []amqp.Authentication
+		amqps *tls.Config
+	)
+
 	if a.tlsEnabled {
-		if u.User != nil {
-			conn, err = amqp.DialTLS(amqpURL, a.tlsConf)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
-			}
-		} else {
-			conn, err = amqp.DialTLS_ExternalAuth(amqpURL, a.tlsConf)
-			if err != nil {
-				return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
-			}
+		amqps = a.tlsConf
+		if u.User == nil {
+			sasl = []amqp.Authentication{&amqp.ExternalAuth{}}
 		}
-	} else {
-		conn, err = amqp.Dial(amqpURL)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
-		}
+	}
+
+	conn, err = amqp.DialConfig(amqpURL, amqp.Config{
+		Dial:            ShuffleDialer,
+		Locale:          defaultLocale,
+		Heartbeat:       defaultHeartbeat,
+		TLSClientConfig: amqps,
+		SASL:            sasl,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", errAMQP09Connect, err)
 	}
 
 	return conn, nil
